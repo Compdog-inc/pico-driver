@@ -19,8 +19,16 @@ while (true)
     }
 
     Console.WriteLine("Client connecting...");
-    client.Connect("10.67.31.2", 5001);
-
+    try
+    {
+        client.Connect("10.67.31.2", 5001);
+    }
+    catch
+    {
+        Console.WriteLine("Error connecting!");
+        client.Dispose();
+        continue;
+    }
     byte sessionId = (byte)Random.Shared.Next(255 /* 0-254 inclusive, 255 is reserved for host session */);
     uint packetTimestamp = 0;
 
