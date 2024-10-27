@@ -9,7 +9,14 @@ joystick.InitializeHIDDevice();
 while (true)
 {
     client = new UdpClient(5002);
-    client.DontFragment = true;
+    try
+    {
+        client.DontFragment = true;
+    }
+    catch
+    {
+        Console.WriteLine("Could not set fragment preference.");
+    }
 
     Console.WriteLine("Client connecting...");
     client.Connect("10.67.31.2", 5001);
@@ -28,7 +35,8 @@ while (true)
             client.Send(packet.toBytes().injectHeader(new SerializedPacket.Header(sessionId, packetTimestamp++)));
 
             Task.Delay(20).Wait();
-        } catch
+        }
+        catch
         {
             Console.WriteLine("Connection crashed!");
             client.Dispose();
