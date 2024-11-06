@@ -5,9 +5,10 @@ namespace DriverStation
 {
     public class XboxClient(IXboxProvider xbox, string hostname, int remotePort, int localPort) : IDisposable
     {
-        private readonly UdpClient client = new(localPort);
+        private UdpClient? client;
 
         public string Hostname { get => hostname; set => hostname = value; }
+        public int LocalPort { get => localPort; set => localPort = value; }
         public int RemotePort { get => remotePort; set => remotePort = value; }
         public IXboxProvider Xbox { get => xbox; set => xbox = value; }
 
@@ -26,7 +27,7 @@ namespace DriverStation
         public void Stop()
         {
             started = false;
-            client.Close();
+            client?.Close();
             clientTask?.Wait(100);
             clientTask?.Dispose();
             clientTask = null;
@@ -34,17 +35,27 @@ namespace DriverStation
 
         private void ClientLoop()
         {
-            try
-            {
-                client.DontFragment = true;
-            }
-            catch
-            {
-                Console.WriteLine("[XBOX]: Could not set fragment preference.");
-            }
-
             while (started)
             {
+                Task.Delay(20).Wait();
+                try
+                {
+                    client = new UdpClient(LocalPort);
+                } catch
+                {
+                    Console.WriteLine("[XBOX]: Error binding socket.");
+                    continue;
+                }
+
+                try
+                {
+                    client.DontFragment = true;
+                }
+                catch
+                {
+                    Console.WriteLine("[XBOX]: Could not set fragment preference.");
+                }
+
                 try
                 {
                     Console.WriteLine("[XBOX]: Client connecting...");
@@ -54,6 +65,7 @@ namespace DriverStation
                 catch
                 {
                     Console.WriteLine("[XBOX]: Error connecting.");
+                    client.Dispose();
                     continue;
                 }
 
@@ -74,8 +86,6 @@ namespace DriverStation
                         break;
                     }
                 }
-
-                Task.Delay(20).Wait();
             }
         }
 
@@ -83,7 +93,7 @@ namespace DriverStation
         {
             GC.SuppressFinalize(this);
             Stop();
-            client.Dispose();
+            client?.Dispose();
         }
     }
 }
