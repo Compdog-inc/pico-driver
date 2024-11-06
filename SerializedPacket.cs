@@ -1,44 +1,50 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Drawing;
+using System.Runtime.InteropServices;
 
 namespace DriverStation
 {
-    internal static class SerializedPacket
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Header
     {
-        [StructLayout(LayoutKind.Sequential)]
-        public struct Header
-        {
-            public byte session;
-            public uint timestamp;
-
-            public Header(byte session, uint timestamp) { this.session = session; this.timestamp = timestamp; }
-        }
+        public byte session;
+        public uint timestamp;
 
         const int size = 5;
 
-        public static byte[] writeHeader(Header header)
+        public Header(byte session, uint timestamp) { this.session = session; this.timestamp = timestamp; }
+
+        public byte[] GetBytes()
         {
             byte[] bytes = new byte[size];
             int index = 0;
-            bytes[index++] = header.session;
-            Array.Copy(BitConverter.GetBytes(header.timestamp), 0, bytes, index, 4);
+            bytes[index++] = session;
+            Array.Copy(BitConverter.GetBytes(timestamp), 0, bytes, index, 4);
             index += 4;
             return bytes;
         }
+    }
 
-        public static void injectHeader(ref byte[] bytes, Header header)
+    public class SerializedPacket
+    {
+        public Header Header { get;set; }
+
+        public SerializedPacket(Header header) { Header = header; }
+
+        public void Serialize(ref byte[] bytes)
         {
-            byte[] output = new byte[bytes.Length + size];
-            Array.Copy(writeHeader(header), 0, output, 0, size);
-            Array.Copy(bytes, 0, output, size, bytes.Length);
+            byte[] header = Header.GetBytes();
+            byte[] output = new byte[bytes.Length + header.Length];
+            Array.Copy(header, 0, output, 0, header.Length);
+            Array.Copy(bytes, 0, output, header.Length, bytes.Length);
             bytes = output;
         }
     }
 
-    internal static class PacketExtensions
+    public static class PacketExtensions
     {
-        public static byte[] injectHeader(this byte[] bytes, SerializedPacket.Header header)
+        public static byte[] SerializeWith(this byte[] bytes, SerializedPacket packet)
         {
-            SerializedPacket.injectHeader(ref bytes, header);
+            packet.Serialize(ref bytes);
             return bytes;
         }
     }
