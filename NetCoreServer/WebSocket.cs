@@ -487,10 +487,15 @@ namespace NetCoreServer
                                     break;
                                 }
                                 case WS_BINARY:
+                                {
+                                    // Call the WebSocket received handler
+                                    _wsHandler.OnWsReceivedBinary(WsReceiveFinalBuffer.Data, 0, WsReceiveFinalBuffer.Size);
+                                    break;
+                                }
                                 case WS_TEXT:
                                 {
                                     // Call the WebSocket received handler
-                                    _wsHandler.OnWsReceived(WsReceiveFinalBuffer.Data, 0, WsReceiveFinalBuffer.Size);
+                                    _wsHandler.OnWsReceivedText(WsReceiveFinalBuffer.Data, 0, WsReceiveFinalBuffer.Size);
                                     break;
                                 }
                             }

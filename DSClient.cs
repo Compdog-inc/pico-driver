@@ -1,5 +1,10 @@
-﻿using NetCoreServer;
+﻿using MessagePack;
+using MessagePack.Resolvers;
+using NetCoreServer;
+using System;
+using System.Buffers;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using WatchdogDotNet;
 using Timer = System.Timers.Timer;
@@ -10,11 +15,71 @@ namespace DriverStation
     {
         private static readonly TimeSpan timeout = TimeSpan.FromSeconds(2);
 
+        private static ulong GetCurrentTimeUs()
+        {
+            return (ulong)(DateTimeOffset.Now.Ticks / (TimeSpan.TicksPerMillisecond / 1000));
+        }
+
+        public enum PacketType : byte
+        {
+            ClockSync
+        };
+
+        [StructLayout(LayoutKind.Sequential)]
+        [Serializable]
+        public struct ClockSyncRequestPacket
+        {
+            public UInt64 clientTime;
+
+            public ClockSyncRequestPacket(MessagePackReader reader)
+            {
+                clientTime = reader.ReadUInt64();
+            }
+
+            public readonly void Serialize(ref MessagePackWriter writer)
+            {
+                writer.WriteUInt64(clientTime);
+            }
+
+            public override readonly string ToString() => $"{{clientTime:{clientTime}}}";
+        };
+
+        [StructLayout(LayoutKind.Sequential)]
+        [Serializable]
+        public struct ClockSyncPacket
+        {
+            public UInt64 clientTime;
+            public UInt64 serverTime;
+
+            public ClockSyncPacket(MessagePackReader reader)
+            {
+                clientTime = reader.ReadUInt64();
+                serverTime = reader.ReadUInt64();
+            }
+
+            public readonly void Serialize(MessagePackWriter writer)
+            {
+                writer.WriteUInt64(clientTime);
+                writer.WriteUInt64(serverTime);
+            }
+
+            public override readonly string ToString() => $"{{clientTime:{clientTime}, serverTime:{serverTime}}}";
+        };
+
         private class Client(string url) : WsClient(ParseUrl(url).address, ParseUrl(url).port)
         {
             private Timer? watchdog;
 
             public Guid latestPingId;
+            public bool hasServerTime = false;
+            public long serverTimeOffset;
+
+            public long GetServerTimeUs()
+            {
+                if (!hasServerTime) return 0;
+
+                return (long)GetCurrentTimeUs() + serverTimeOffset;
+            }
 
             private static (string host, string path, string address, int port) ParseUrl(string url)
             {
@@ -78,6 +143,8 @@ namespace DriverStation
                     AutoReset = false
                 };
                 watchdog.Elapsed += (s, e) => { Disconnect(); };
+
+                SendClockSync();
             }
 
             bool wsDisconnected = false;
@@ -88,9 +155,65 @@ namespace DriverStation
                 watchdog?.Dispose();
             }
 
-            public override void OnWsReceived(byte[] buffer, long offset, long size)
+            public override void OnWsReceivedBinary(byte[] buffer, long offset, long size)
             {
-                Console.WriteLine($"Incoming: {Encoding.UTF8.GetString(buffer, (int)offset, (int)size)}");
+                if (size > 0)
+                {
+                    PacketType packetType = (PacketType)buffer[0];
+                    switch (packetType)
+                    {
+                        case PacketType.ClockSync:
+                            {
+                                long expected = GetServerTimeUs();
+                                var reader = new MessagePackReader(new ReadOnlyMemory<byte>(buffer, (int)offset + 1, (int)size - 1));
+                                ClockSyncPacket packet = new(reader);
+                                ulong currentTime = GetCurrentTimeUs();
+                                long rtt = ((long)currentTime - (long)packet.clientTime) / 2;
+                                ulong serverTime = rtt > 0 ? packet.serverTime + (ulong)rtt : packet.serverTime - (ulong)-rtt;
+                                serverTimeOffset = (long)serverTime - (long)currentTime;
+
+                                long error = (long)serverTime - expected;
+                                if(Math.Abs(error) > 30000 && hasServerTime)
+                                {
+                                    var errorTs = TimeSpan.FromMicroseconds(error);
+                                    Console.WriteLine($"[DSClient]: Abnormally large clock error ({errorTs.TotalMilliseconds}ms)! This could lead to packet loss.");
+                                }
+
+                                if (!hasServerTime)
+                                {
+                                    Console.WriteLine($"[DSClient]: Retrieved server time: {serverTime}");
+                                }
+
+                                hasServerTime = true;
+                                break;
+                            }
+                    }
+                }
+            }
+
+            public void SendClockSync()
+            {
+                ClockSyncRequestPacket packet = new()
+                {
+                    clientTime = GetCurrentTimeUs()
+                };
+
+                PacketType packetType = PacketType.ClockSync;
+                byte packetTypeByte = (byte)packetType;
+
+                var buffer = new ArrayBufferWriter<byte>();
+                buffer.Write(new ReadOnlySpan<byte>(ref packetTypeByte));
+                MessagePackWriter writer = new(buffer);
+                packet.Serialize(ref writer);
+
+                writer.Flush();
+                SendBinaryAsync(buffer.WrittenSpan);
+                buffer.Clear();
+            }
+
+            public override void OnWsReceivedText(byte[] buffer, long offset, long size)
+            {
+                Console.WriteLine($"[DSClient]: Server responded with '{Encoding.UTF8.GetString(buffer, (int)offset, (int)size)}'");
             }
 
             public override void OnWsPing(byte[] buffer, long offset, long size)
@@ -134,6 +257,9 @@ namespace DriverStation
 
         public bool IsConnected => client.IsConnected;
 
+        public long ServerTimeUs => client.GetServerTimeUs();
+        public TimeSpan ServerTime => TimeSpan.FromMicroseconds(ServerTimeUs);
+
         public DSClient(string address)
         {
             client = new Client("ws://" + address + ":5002/");
@@ -149,6 +275,18 @@ namespace DriverStation
                     client.latestPingId = Guid.NewGuid();
                     client.SendPingAsync(client.latestPingId.ToByteArray());
                     Task.Delay(1000).Wait();
+                }
+            });
+            _ = Task.Run(() =>
+            {
+                while (true)
+                {
+                    Task.Delay(5000).Wait();
+
+                    if (client.IsConnected)
+                    {
+                        client.SendClockSync();
+                    }
                 }
             });
             return res;

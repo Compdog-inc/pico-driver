@@ -48,7 +48,15 @@ namespace NetCoreServer
         /// <param name="buffer">Received buffer</param>
         /// <param name="offset">Received buffer offset</param>
         /// <param name="size">Received buffer size</param>
-        void OnWsReceived(byte[] buffer, long offset, long size) {}
+        void OnWsReceivedBinary(byte[] buffer, long offset, long size) {}
+
+        /// <summary>
+        /// Handle WebSocket received notification
+        /// </summary>
+        /// <param name="buffer">Received buffer</param>
+        /// <param name="offset">Received buffer offset</param>
+        /// <param name="size">Received buffer size</param>
+        void OnWsReceivedText(byte[] buffer, long offset, long size) { }
 
         /// <summary>
         /// Handle WebSocket client close notification

@@ -3,7 +3,7 @@ using System.Net.Sockets;
 
 namespace DriverStation
 {
-    public class XboxClient(IXboxProvider xbox, string hostname, int remotePort, int localPort) : IDisposable
+    public class XboxClient(IXboxProvider xbox, DSClient driverstation, string hostname, int remotePort, int localPort) : IDisposable
     {
         private UdpClient? client;
 
@@ -70,13 +70,12 @@ namespace DriverStation
                 }
 
                 byte sessionId = (byte)Random.Shared.Next(255 /* 0-254 inclusive, 255 is reserved for host session */);
-                uint packetTimestamp = 0;
 
                 while (started)
                 {
                     try
                     {
-                        client.Send(xbox.Packet.toBytes().SerializeWith(new(new Header(sessionId, packetTimestamp++))));
+                        client.Send(xbox.Packet.toBytes().SerializeWith(new(new Header(sessionId, (ulong)driverstation.ServerTimeUs))));
                         Task.Delay(20).Wait();
                     }
                     catch

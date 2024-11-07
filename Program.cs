@@ -20,11 +20,11 @@ switch (err = xbox.Connect())
         break;
 }
 
-using XboxClient xboxClient = new(xbox, "10.67.31.2", 5001, 5002);
-xboxClient.Start();
-
 using DSClient dsClient = new("10.67.31.2");
 dsClient.Connect();
+
+using XboxClient xboxClient = new(xbox, dsClient, "10.67.31.2", 5001, 5002);
+xboxClient.Start();
 
 while (true)
 {

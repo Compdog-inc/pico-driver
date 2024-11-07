@@ -1,5 +1,4 @@
-﻿using System.Drawing;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace DriverStation
 {
@@ -7,19 +6,19 @@ namespace DriverStation
     public struct Header
     {
         public byte session;
-        public uint timestamp;
+        public ulong timestamp;
 
-        const int size = 5;
+        const int size = 9;
 
-        public Header(byte session, uint timestamp) { this.session = session; this.timestamp = timestamp; }
+        public Header(byte session, ulong timestamp) { this.session = session; this.timestamp = timestamp; }
 
         public byte[] GetBytes()
         {
             byte[] bytes = new byte[size];
             int index = 0;
             bytes[index++] = session;
-            Array.Copy(BitConverter.GetBytes(timestamp), 0, bytes, index, 4);
-            index += 4;
+            Array.Copy(BitConverter.GetBytes(timestamp), 0, bytes, index, 8);
+            index += 8;
             return bytes;
         }
     }

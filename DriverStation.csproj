@@ -28,6 +28,11 @@
 
   <ItemGroup>
     <PackageReference Include="HidApi.Net" Version="1.1.0" />
+    <PackageReference Include="MessagePack" Version="3.0.238-rc.1" />
+    <PackageReference Include="MessagePackAnalyzer" Version="3.0.238-rc.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="WatchdogDotNet" Version="1.0.0" />
   </ItemGroup>
 

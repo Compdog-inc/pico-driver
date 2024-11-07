@@ -389,7 +389,8 @@ namespace NetCoreServer
         public virtual void OnWsConnected(HttpRequest request) {}
         public virtual void OnWsDisconnecting() {}
         public virtual void OnWsDisconnected() {}
-        public virtual void OnWsReceived(byte[] buffer, long offset, long size) {}
+        public virtual void OnWsReceivedBinary(byte[] buffer, long offset, long size) {}
+        public virtual void OnWsReceivedText(byte[] buffer, long offset, long size) {}
         public virtual void OnWsClose(byte[] buffer, long offset, long size, int status = 1000) { CloseAsync(); }
         public virtual void OnWsPing(byte[] buffer, long offset, long size) { SendPongAsync(buffer, offset, size); }
         public virtual void OnWsPong(byte[] buffer, long offset, long size) {}
