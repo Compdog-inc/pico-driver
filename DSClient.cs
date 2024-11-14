@@ -22,7 +22,8 @@ namespace DriverStation
 
         public enum PacketType : byte
         {
-            ClockSync
+            ClockSync,
+            RobotProperties
         };
 
         [StructLayout(LayoutKind.Sequential)]
@@ -31,7 +32,7 @@ namespace DriverStation
         {
             public UInt64 clientTime;
 
-            public ClockSyncRequestPacket(MessagePackReader reader)
+            public ClockSyncRequestPacket(ref MessagePackReader reader)
             {
                 clientTime = reader.ReadUInt64();
             }
@@ -51,13 +52,13 @@ namespace DriverStation
             public UInt64 clientTime;
             public UInt64 serverTime;
 
-            public ClockSyncPacket(MessagePackReader reader)
+            public ClockSyncPacket(ref MessagePackReader reader)
             {
                 clientTime = reader.ReadUInt64();
                 serverTime = reader.ReadUInt64();
             }
 
-            public readonly void Serialize(MessagePackWriter writer)
+            public readonly void Serialize(ref MessagePackWriter writer)
             {
                 writer.WriteUInt64(clientTime);
                 writer.WriteUInt64(serverTime);
@@ -65,6 +66,102 @@ namespace DriverStation
 
             public override readonly string ToString() => $"{{clientTime:{clientTime}, serverTime:{serverTime}}}";
         };
+
+        [StructLayout(LayoutKind.Sequential)]
+        [Serializable]
+        public struct Units
+        {
+            public float value;
+
+            public Units(ref MessagePackReader reader)
+            {
+                var bytes = reader.ReadBytes().GetValueOrDefault();
+                MessagePackReader subreader = new(bytes);
+                value = (float)subreader.ReadDouble();
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        [Serializable]
+        public struct Vector3
+        {
+            public Units x;
+            public Units y;
+            public Units z;
+
+            public Vector3(ref MessagePackReader reader)
+            {
+                var bytes = reader.ReadBytes().GetValueOrDefault();
+                MessagePackReader subreader = new(bytes);
+                x = new Units(ref subreader);
+                y = new Units(ref subreader);
+                z = new Units(ref subreader);
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        [Serializable]
+        public struct Vector4
+        {
+            public Units x;
+            public Units y;
+            public Units z;
+            public Units w;
+
+            public Vector4(ref MessagePackReader reader)
+            {
+                var bytes = reader.ReadBytes().GetValueOrDefault();
+                MessagePackReader subreader = new(bytes);
+                x = new Units(ref subreader);
+                y = new Units(ref subreader);
+                z = new Units(ref subreader);
+                w = new Units(ref subreader);
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        [Serializable]
+        public struct Transform
+        {
+            public Vector3 position;
+            public Vector4 rotation;
+
+            public Transform(ref MessagePackReader reader)
+            {
+                var bytes = reader.ReadBytes().GetValueOrDefault();
+                MessagePackReader subreader = new(bytes);
+                position = new Vector3(ref subreader);
+                rotation = new Vector4(ref subreader);
+            }
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        [Serializable]
+        public struct RobotProperties
+        {
+            public Vector3 frameDimensions;
+            public Units wheelDiameter;
+            public Transform[] wheels;
+            public Transform[] whiskers;
+
+            public RobotProperties(ref MessagePackReader reader)
+            {
+                frameDimensions = new Vector3(ref reader);
+                wheelDiameter = new Units(ref reader);
+
+                wheels = new Transform[reader.ReadArrayHeader()];
+                for (int i = 0; i < wheels.Length; i++)
+                {
+                    wheels[i] = new Transform(ref reader);
+                }
+
+                whiskers = new Transform[reader.ReadArrayHeader()];
+                for (int i = 0; i < whiskers.Length; i++)
+                {
+                    whiskers[i] = new Transform(ref reader);
+                }
+            }
+        }
 
         private class Client(string url) : WsClient(ParseUrl(url).address, ParseUrl(url).port)
         {
@@ -142,7 +239,7 @@ namespace DriverStation
                 {
                     AutoReset = false
                 };
-                watchdog.Elapsed += (s, e) => { Disconnect(); };
+                watchdog.Elapsed += (s, e) => { Console.WriteLine("[DSClient]: Connection timed out."); Disconnect(); };
 
                 SendClockSync();
             }
@@ -166,7 +263,7 @@ namespace DriverStation
                             {
                                 long expected = GetServerTimeUs();
                                 var reader = new MessagePackReader(new ReadOnlyMemory<byte>(buffer, (int)offset + 1, (int)size - 1));
-                                ClockSyncPacket packet = new(reader);
+                                ClockSyncPacket packet = new(ref reader);
                                 ulong currentTime = GetCurrentTimeUs();
                                 long rtt = ((long)currentTime - (long)packet.clientTime) / 2;
                                 ulong serverTime = rtt > 0 ? packet.serverTime + (ulong)rtt : packet.serverTime - (ulong)-rtt;
@@ -185,6 +282,16 @@ namespace DriverStation
                                 }
 
                                 hasServerTime = true;
+                                break;
+                            }
+                        case PacketType.RobotProperties:
+                            {
+                                var reader = new MessagePackReader(new ReadOnlyMemory<byte>(buffer, (int)offset + 1, (int)size - 1));
+                                RobotProperties packet = new(ref reader);
+                                break;
+                            }
+                        default:
+                            {
                                 break;
                             }
                     }
@@ -209,6 +316,11 @@ namespace DriverStation
                 writer.Flush();
                 SendBinaryAsync(buffer.WrittenSpan);
                 buffer.Clear();
+            }
+
+            public void RequestRobotProperties()
+            {
+                SendBinaryAsync(new byte[] { (byte)PacketType.RobotProperties });
             }
 
             public override void OnWsReceivedText(byte[] buffer, long offset, long size)
@@ -286,6 +398,7 @@ namespace DriverStation
                     if (client.IsConnected)
                     {
                         client.SendClockSync();
+                        client.RequestRobotProperties();
                     }
                 }
             });
