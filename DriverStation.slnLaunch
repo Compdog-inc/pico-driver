@@ -1,11 +1,21 @@
 [
   {
-    "Name": "With App",
+    "Name": "DS + App",
     "Projects": [
       {
         "Path": "DriverStation.csproj",
         "Action": "Start",
         "DebugTarget": "DriverStation"
+      }
+    ]
+  },
+  {
+    "Name": "Just App",
+    "Projects": [
+      {
+        "Path": "webapp\\webapp.esproj",
+        "Action": "Start",
+        "DebugTarget": "localhost (Chrome)"
       }
     ]
   }
