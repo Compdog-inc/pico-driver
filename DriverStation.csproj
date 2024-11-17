@@ -26,6 +26,16 @@
     </Content>
   </ItemGroup>
 
+  <PropertyGroup>
+    <DefaultItemExcludes>$(DefaultItemExcludes);webapp\**\*.*</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="webapp\dist\**\*" Link="app/%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="HidApi.Net" Version="1.1.0" />
     <PackageReference Include="MessagePack" Version="3.0.238-rc.1" />

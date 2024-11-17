@@ -1,7 +1,5 @@
 ﻿using MessagePack;
-using MessagePack.Resolvers;
 using NetCoreServer;
-using System;
 using System.Buffers;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -13,6 +11,33 @@ namespace DriverStation
 {
     public class DSClient : IDisposable
     {
+        [StructLayout(LayoutKind.Sequential)]
+        [Serializable]
+        public struct SharedStatus
+        {
+            public bool connected;
+            public string address;
+            public bool hasServerTime;
+            public long serverTimeOffset;
+
+            public readonly void Serialize(ref MessagePackWriter writer)
+            {
+                writer.WriteMapHeader(4);
+
+                writer.Write(nameof(connected));
+                writer.Write(connected);
+
+                writer.Write(nameof(address));
+                writer.Write(address);
+
+                writer.Write(nameof(hasServerTime));
+                writer.Write(hasServerTime);
+
+                writer.Write(nameof(serverTimeOffset));
+                writer.Write(serverTimeOffset);
+            }
+        }
+
         private static readonly TimeSpan timeout = TimeSpan.FromSeconds(2);
 
         private static ulong GetCurrentTimeUs()
@@ -163,7 +188,12 @@ namespace DriverStation
             }
         }
 
-        private class Client(string url) : WsClient(ParseUrl(url).address, ParseUrl(url).port)
+        private void InvokeStatusChanged()
+        {
+            StatusChanged?.Invoke();
+        }
+
+        private class Client(string url, DSClient ds) : WsClient(ParseUrl(url).address, ParseUrl(url).port)
         {
             private Timer? watchdog;
 
@@ -242,6 +272,8 @@ namespace DriverStation
                 watchdog.Elapsed += (s, e) => { Console.WriteLine("[DSClient]: Connection timed out."); Disconnect(); };
 
                 SendClockSync();
+
+                ds.InvokeStatusChanged();
             }
 
             bool wsDisconnected = false;
@@ -250,6 +282,8 @@ namespace DriverStation
                 wsDisconnected = true;
                 Console.WriteLine($"[DSClient]: Connection lost.");
                 watchdog?.Dispose();
+
+                ds.InvokeStatusChanged();
             }
 
             public override void OnWsReceivedBinary(byte[] buffer, long offset, long size)
@@ -282,6 +316,8 @@ namespace DriverStation
                                 }
 
                                 hasServerTime = true;
+
+                                ds.InvokeStatusChanged();
                                 break;
                             }
                         case PacketType.RobotProperties:
@@ -372,9 +408,19 @@ namespace DriverStation
         public long ServerTimeUs => client.GetServerTimeUs();
         public TimeSpan ServerTime => TimeSpan.FromMicroseconds(ServerTimeUs);
 
+        public SharedStatus Status => new()
+        {
+            address = client.Address,
+            connected = IsConnected,
+            hasServerTime = client.hasServerTime,
+            serverTimeOffset = client.serverTimeOffset
+        };
+
+        public event Action? StatusChanged;
+
         public DSClient(string address)
         {
-            client = new Client("ws://" + address + ":5002/");
+            client = new Client("ws://" + address + ":5002/", this);
         }
 
         public bool Connect()
