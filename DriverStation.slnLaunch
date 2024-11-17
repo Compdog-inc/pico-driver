@@ -1,0 +1,12 @@
+[
+  {
+    "Name": "With App",
+    "Projects": [
+      {
+        "Path": "DriverStation.csproj",
+        "Action": "Start",
+        "DebugTarget": "DriverStation"
+      }
+    ]
+  }
+]

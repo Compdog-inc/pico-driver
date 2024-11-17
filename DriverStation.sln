@@ -4,6 +4,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 17.5.002.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DriverStation", "DriverStation.csproj", "{31375861-CFBF-4146-88AE-01C0D7B748E2}"
+	ProjectSection(ProjectDependencies) = postProject
+		{D1A03353-94DA-4658-9744-318DB8C7F8E0} = {D1A03353-94DA-4658-9744-318DB8C7F8E0}
+	EndProjectSection
 EndProject
 Project("{54A90642-561A-4BB1-A94E-469ADEE60C69}") = "webapp", "webapp\webapp.esproj", "{D1A03353-94DA-4658-9744-318DB8C7F8E0}"
 EndProject
