@@ -1,18 +1,51 @@
-﻿using MessagePack;
+﻿using DriverStation.Providers;
+using MessagePack;
 using NetCoreServer;
 using System.Buffers;
 using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
 using static DriverStation.DSClient;
 
 namespace DriverStation
 {
+    public enum ClientPacketType
+    {
+        ClientStatus,
+        Joystick
+    }
+
     public class WebServer : WsServer
     {
+        public static void WritePacketType(ref MessagePackWriter writer, ClientPacketType type)
+        {
+            writer.Write("type");
+            writer.Write((int)type);
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        [Serializable]
+        struct JoystickPacket
+        {
+            public short x;
+            public short y;
+
+            public readonly void Serialize(ref MessagePackWriter writer)
+            {
+                writer.WriteMapHeader(2 + 1);
+                WritePacketType(ref writer, ClientPacketType.Joystick);
+
+                writer.Write(nameof(x));
+                writer.Write(x);
+
+                writer.Write(nameof(y));
+                writer.Write(y);
+            }
+        }
+
         class DriverStationAPISession : WsSession
         {
             public DriverStationAPISession(WsServer server) : base(server) { }
@@ -111,7 +144,7 @@ namespace DriverStation
 
                 if (WebSocket.WsHandshaked)
                     return;
-                
+
                 // Process HTTP request methods
                 if (request.Method == "HEAD")
                     SendResponseAsync(Response.MakeHeadResponse());
@@ -143,7 +176,7 @@ namespace DriverStation
                 }
                 else if ((request.Method == "POST") || (request.Method == "PUT"))
                 {
-                    SendResponseAsync(Response.MakeOkResponse());   
+                    SendResponseAsync(Response.MakeOkResponse());
                 }
                 else if (request.Method == "DELETE")
                 {
@@ -208,6 +241,22 @@ namespace DriverStation
             status.Serialize(ref writer);
             writer.Flush();
             MulticastBinary(output.WrittenSpan);
+        }
+
+        public void MulticastJoystick(XboxPacket joystick)
+        {
+            ArrayBufferWriter<byte> output = new ArrayBufferWriter<byte>();
+            MessagePackWriter writer = new MessagePackWriter(output);
+            JoystickPacket packet = new()
+            {
+                x = joystick.axis_X,
+                y = joystick.axis_Y,
+            };
+            packet.Serialize(ref writer);
+            writer.Flush();
+            MulticastBinary(output.WrittenSpan);
+
+            //Console.WriteLine($"[WebServer]: joystick updated < {packet.x}, {packet.y} >");
         }
 
         protected override void OnStarted()

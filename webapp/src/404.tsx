@@ -1,15 +1,16 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import './404.css'
+import Main from './_app';
+//import styles from './404.module.css';
+import Typography from '@mui/joy/Typography';
+import Link from '@mui/joy/Link';
 
-createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-        <>
-            <h1>404 - Page not found!</h1>
-            <div>
-                Go back <a href="/">home</a>
-            </div>
-        </>
-    </StrictMode>,
-)
+Main(
+    {
+        children:
+            <>
+                <Typography level="h1">404 - Page not found!</Typography>
+                <Typography level="title-lg">
+                    Go back <Link href="/">home</Link>
+                </Typography>
+            </>
+    }
+);

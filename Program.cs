@@ -5,6 +5,10 @@ using var webServer = new WebServer(5170);
 webServer.Start();
 
 using var xbox = new CircuitPythonJoystickProvider();
+xbox.Updated += () =>
+{
+    webServer.MulticastJoystick(xbox.Packet);
+};
 
 HIDDeviceProvider.ErrorCode err;
 switch (err = xbox.Connect())

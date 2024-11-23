@@ -9,6 +9,8 @@
         private float X = 0;
         private float Y = 0;
 
+        public event Action? Updated;
+
         public override XboxPacket Packet
         {
             get
@@ -20,6 +22,9 @@
             }
         }
 
+        private short prevX;
+        private short prevY;
+
         protected override void OnReceived(ReadOnlySpan<byte> bytes)
         {
             if (bytes.Length == 7)
@@ -30,7 +35,11 @@
                 {
                     X = (float)x / short.MaxValue;
                     Y = (float)y / short.MaxValue;
-                    Console.WriteLine("X: " + X + ", Y: " + Y);
+                    if (x != prevX || y != prevY)
+                    {
+                        prevX = x; prevY = y;
+                        Updated?.Invoke();
+                    }
                 }
                 else
                 {

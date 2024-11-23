@@ -22,8 +22,9 @@ namespace DriverStation
 
             public readonly void Serialize(ref MessagePackWriter writer)
             {
-                writer.WriteMapHeader(4);
-
+                writer.WriteMapHeader(4+1);
+                WebServer.WritePacketType(ref writer, ClientPacketType.ClientStatus);
+                
                 writer.Write(nameof(connected));
                 writer.Write(connected);
 
@@ -40,9 +41,9 @@ namespace DriverStation
 
         private static readonly TimeSpan timeout = TimeSpan.FromSeconds(2);
 
-        private static ulong GetCurrentTimeUs()
+        public static ulong GetCurrentTimeUs()
         {
-            return (ulong)(DateTimeOffset.Now.Ticks / (TimeSpan.TicksPerMillisecond / 1000));
+            return (ulong)((DateTimeOffset.UtcNow.UtcTicks - DateTimeOffset.UnixEpoch.UtcTicks) / (TimeSpan.TicksPerMillisecond / 1000));
         }
 
         public enum PacketType : byte
@@ -373,7 +374,13 @@ namespace DriverStation
             {
                 base.OnWsPong(buffer, offset, size);
                 if (latestPingId.Equals(new Guid(new ReadOnlySpan<byte>(buffer, (int)offset, (int)size))))
-                    watchdog?.Restart();
+                {
+                    try
+                    {
+                        watchdog?.Restart();
+                    }
+                    catch { }
+                }
             }
 
             protected override void OnDisconnected()
