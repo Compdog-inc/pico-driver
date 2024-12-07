@@ -41,7 +41,7 @@ namespace DriverStation
 
         private static readonly TimeSpan timeout = TimeSpan.FromSeconds(2);
 
-        public static ulong GetCurrentTimeUs()
+        private static ulong GetCurrentTimeUs()
         {
             return (ulong)((DateTimeOffset.UtcNow.UtcTicks - DateTimeOffset.UnixEpoch.UtcTicks) / (TimeSpan.TicksPerMillisecond / 1000));
         }
@@ -289,50 +289,53 @@ namespace DriverStation
 
             public override void OnWsReceivedBinary(byte[] buffer, long offset, long size)
             {
-                if (size > 0)
+                try
                 {
-                    PacketType packetType = (PacketType)buffer[0];
-                    switch (packetType)
+                    if (size > 0)
                     {
-                        case PacketType.ClockSync:
-                            {
-                                long expected = GetServerTimeUs();
-                                var reader = new MessagePackReader(new ReadOnlyMemory<byte>(buffer, (int)offset + 1, (int)size - 1));
-                                ClockSyncPacket packet = new(ref reader);
-                                ulong currentTime = GetCurrentTimeUs();
-                                long rtt = ((long)currentTime - (long)packet.clientTime) / 2;
-                                ulong serverTime = rtt > 0 ? packet.serverTime + (ulong)rtt : packet.serverTime - (ulong)-rtt;
-                                serverTimeOffset = (long)serverTime - (long)currentTime;
-
-                                long error = (long)serverTime - expected;
-                                if(Math.Abs(error) > 30000 && hasServerTime)
+                        PacketType packetType = (PacketType)buffer[0];
+                        switch (packetType)
+                        {
+                            case PacketType.ClockSync:
                                 {
-                                    var errorTs = TimeSpan.FromMicroseconds(error);
-                                    Console.WriteLine($"[DSClient]: Abnormally large clock error ({errorTs.TotalMilliseconds}ms)! This could lead to packet loss.");
-                                }
+                                    long expected = GetServerTimeUs();
+                                    var reader = new MessagePackReader(new ReadOnlyMemory<byte>(buffer, (int)offset + 1, (int)size - 1));
+                                    ClockSyncPacket packet = new(ref reader);
+                                    ulong currentTime = GetCurrentTimeUs();
+                                    long rtt = ((long)currentTime - (long)packet.clientTime) / 2;
+                                    ulong serverTime = rtt > 0 ? packet.serverTime + (ulong)rtt : packet.serverTime - (ulong)-rtt;
+                                    serverTimeOffset = (long)serverTime - (long)currentTime;
 
-                                if (!hasServerTime)
+                                    long error = (long)serverTime - expected;
+                                    if (Math.Abs(error) > 30000 && hasServerTime)
+                                    {
+                                        var errorTs = TimeSpan.FromMicroseconds(error);
+                                        Console.WriteLine($"[DSClient]: Abnormally large clock error ({errorTs.TotalMilliseconds}ms)! This could lead to packet loss.");
+                                    }
+
+                                    if (!hasServerTime)
+                                    {
+                                        Console.WriteLine($"[DSClient]: Retrieved server time: {serverTime}");
+                                    }
+
+                                    hasServerTime = true;
+
+                                    ds.InvokeStatusChanged();
+                                    break;
+                                }
+                            case PacketType.RobotProperties:
                                 {
-                                    Console.WriteLine($"[DSClient]: Retrieved server time: {serverTime}");
+                                    var reader = new MessagePackReader(new ReadOnlyMemory<byte>(buffer, (int)offset + 1, (int)size - 1));
+                                    RobotProperties packet = new(ref reader);
+                                    break;
                                 }
-
-                                hasServerTime = true;
-
-                                ds.InvokeStatusChanged();
-                                break;
-                            }
-                        case PacketType.RobotProperties:
-                            {
-                                var reader = new MessagePackReader(new ReadOnlyMemory<byte>(buffer, (int)offset + 1, (int)size - 1));
-                                RobotProperties packet = new(ref reader);
-                                break;
-                            }
-                        default:
-                            {
-                                break;
-                            }
+                            default:
+                                {
+                                    break;
+                                }
+                        }
                     }
-                }
+                } catch { }
             }
 
             public void SendClockSync()
